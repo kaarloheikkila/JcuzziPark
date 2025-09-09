@@ -16,6 +16,7 @@ export interface WeatherData {
   condition: 'sunny' | 'cloudy' | 'rainy' | 'stormy' | 'snowy'
   timestamp: Date
   badWeatherScore: number // 0-100, korkeampi = huonompi sää = parempi jacuzzi-kysyntä
+  dailyRainfall?: { [date: string]: number } // Daily rainfall forecast in mm
 }
 
 export interface ElectricityData {
@@ -26,6 +27,7 @@ export interface ElectricityData {
   gridLoad: number
   timestamp: Date
   costEfficiencyScore: number // 0-100, korkeampi = halvempi
+  hourlyPrices?: { [hour: string]: number } // Hourly electricity prices for optimization
 }
 
 export interface BusinessData {
@@ -37,6 +39,7 @@ export interface BusinessData {
   businessDensity: number
   demandScore: number // 0-100, korkeampi = enemmän potentiaalisia asiakkaita
   timestamp: Date
+  cultureSpendingPerCitizen?: number // €/citizen from cultural statistics
 }
 
 export interface OptimalLocation {
@@ -46,4 +49,17 @@ export interface OptimalLocation {
   businessScore: number
   combinedScore: number
   recommendation: string
+}
+
+export interface DailyRainData {
+  [site: string]: {
+    [date: string]: number // mm of rain
+  }
+}
+
+export interface ElectricityPriceData {
+  date: string
+  hour: number
+  price: number // €/MWh
+  region?: string
 }

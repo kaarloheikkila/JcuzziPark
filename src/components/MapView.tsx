@@ -1,47 +1,90 @@
-import { WeatherData, ElectricityData, BusinessData, Location } from '../types'
+import { WeatherData, ElectricityData, BusinessData } from '../types'
+import { useState, useEffect } from 'react'
+import ShapefileService from '../services/ShapefileService'
 
 interface MapViewProps {
   weatherData: WeatherData[]
   electricityData: ElectricityData[]
   businessData: BusinessData[]
-  currentLocation: Location | null
-  onLocationChange: (location: Location) => void
+  selectedLocation: string | null
+  onLocationChange: (locationName: string) => void
+  activeLayer: 'weather' | 'electricity' | 'business' | 'combined'
+  timeOffset: number
 }
 
-const MapView = ({ weatherData, electricityData, businessData, currentLocation, onLocationChange }: MapViewProps) => {
-  // Simuloidaan kartta-komponentti (oikeassa sovelluksessa käytettäisiin Leaflet/OpenStreetMap)
-  const locations = [
-    { id: 'helsinki', name: 'Helsinki', lat: 60.1699, lng: 24.9384, region: 'Uusimaa' },
-    { id: 'tampere', name: 'Tampere', lat: 61.4981, lng: 23.7608, region: 'Pirkanmaa' },
-    { id: 'turku', name: 'Turku', lat: 60.4518, lng: 22.2666, region: 'Varsinais-Suomi' },
-    { id: 'espoo', name: 'Espoo', lat: 60.2055, lng: 24.6559, region: 'Uusimaa' },
-    { id: 'lappeenranta', name: 'Lappeenranta', lat: 61.0587, lng: 28.1887, region: 'Etelä-Karjala' },
-    { id: 'lappi', name: 'Lappi', lat: 66.5039, lng: 25.7294, region: 'Lappi' }
+const MapView = ({ weatherData, electricityData, businessData, selectedLocation, onLocationChange, activeLayer }: MapViewProps) => {
+  const [finlandPath, setFinlandPath] = useState<string>('')
+  
+  useEffect(() => {
+    // Load Finland border from shapefile
+    const loadFinlandPath = async () => {
+      try {
+        const path = await ShapefileService.getFinlandPath(300, 400)
+        setFinlandPath(path)
+      } catch (error) {
+        console.error('Error loading Finland path:', error)
+        setFinlandPath(ShapefileService.getFallbackFinlandPath())
+      }
+    }
+    
+    loadFinlandPath()
+  }, [])
+  // Finland map locations with verified accurate coordinates (longitude, latitude)
+  const finlandCities = [
+    { id: 'helsinki', name: 'Helsinki', lon: 24.9354, lat: 60.1695 },
+    { id: 'espoo', name: 'Espoo', lon: 24.6522, lat: 60.2055 },
+    { id: 'tampere', name: 'Tampere', lon: 23.7610, lat: 61.4981 },
+    { id: 'turku', name: 'Turku', lon: 22.2666, lat: 60.4518 },
+    { id: 'oulu', name: 'Oulu', lon: 25.4685, lat: 65.0121 },
+    { id: 'lahti', name: 'Lahti', lon: 25.6612, lat: 60.9827 },
+    { id: 'kuopio', name: 'Kuopio', lon: 27.6782, lat: 62.8924 },
+    { id: 'vaasa', name: 'Vaasa', lon: 21.6158, lat: 63.0960 },
+    { id: 'lappeenranta', name: 'Lappeenranta', lon: 28.1887, lat: 61.0587 },
+    { id: 'rovaniemi', name: 'Rovaniemi', lon: 25.7209, lat: 66.5039 }
   ]
+  
+  // Convert real coordinates to SVG coordinates using improved projection
+  const locations = finlandCities.map(city => {
+    const [x, y] = ShapefileService.projectCoordinates(city.lon, city.lat, 300, 400)
+    return {
+      id: city.id,
+      name: city.name,
+      x: x,
+      y: y
+    }
+  })
 
-  const getLocationScore = (locationId: string) => {
-    const weather = weatherData.find(w => w.locationId === locationId)
-    const electricity = electricityData.find(e => e.locationId === locationId)
-    const business = businessData.find(b => b.locationId === locationId)
+  const getLocationScore = (locationName: string) => {
+    const weather = weatherData.find(w => w.locationName === locationName)
+    const electricity = electricityData.find(e => e.locationName === locationName)
+    const business = businessData.find(b => b.locationName === locationName)
 
-    if (!weather || !electricity || !business) return 0
+    if (!weather || !electricity || !business) return 50
 
-    return Math.round(
-      (weather.badWeatherScore * 0.4) +
-      (electricity.costEfficiencyScore * 0.35) +
-      (business.demandScore * 0.25)
-    )
+    switch (activeLayer) {
+      case 'weather':
+        return weather.badWeatherScore
+      case 'electricity':
+        return electricity.costEfficiencyScore
+      case 'business':
+        return business.demandScore
+      case 'combined':
+        return Math.round((weather.badWeatherScore + electricity.costEfficiencyScore + business.demandScore) / 3)
+      default:
+        return 50
+    }
   }
 
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return 'bg-green-500'
-    if (score >= 65) return 'bg-yellow-500'
-    if (score >= 50) return 'bg-orange-500'
-    return 'bg-red-500'
+  const getHeatmapColor = (score: number) => {
+    if (score >= 80) return '#ef4444' // Red
+    if (score >= 60) return '#f97316' // Orange
+    if (score >= 40) return '#eab308' // Yellow
+    if (score >= 20) return '#22c55e' // Green
+    return '#3b82f6' // Blue
   }
 
-  const getWeatherIcon = (locationId: string) => {
-    const weather = weatherData.find(w => w.locationId === locationId)
+  const getWeatherIcon = (locationName: string) => {
+    const weather = weatherData.find(w => w.locationName === locationName)
     if (!weather) return '🌤️'
     
     switch (weather.condition) {
@@ -55,92 +98,120 @@ const MapView = ({ weatherData, electricityData, businessData, currentLocation, 
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h2 className="text-xl font-bold mb-4">🗺️ Suomen Jacuzzi-kartta</h2>
+    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg p-6">
+      <h3 className="text-lg font-semibold text-gray-800 mb-4">🗺️ Suomen Jacuzzi-kartta</h3>
       
-      {/* Simuloitu kartta */}
-      <div className="relative bg-gradient-to-b from-blue-900 to-green-900 rounded-lg h-96 overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        
-        {/* Sijainnit kartalla */}
-        {locations.map((location) => {
-          const score = getLocationScore(location.id)
-          const isSelected = currentLocation?.id === location.id
+      {/* SVG Map */}
+      <div className="relative">
+        <svg viewBox="0 0 300 400" className="w-full h-96 border border-gray-300 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200">
+          {/* Finland outline from shapefile */}
+          <path
+            d={finlandPath || ShapefileService.getFallbackFinlandPath()}
+            fill="url(#finlandGradient)"
+            stroke="#22c55e"
+            strokeWidth="1"
+          />
           
-          return (
-            <div
-              key={location.id}
-              className={`absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer transition-all duration-300 ${
-                isSelected ? 'scale-125' : 'hover:scale-110'
-              }`}
-              style={{
-                left: `${((location.lng - 20) / 15) * 100}%`,
-                top: `${(1 - (location.lat - 59) / 8) * 100}%`
-              }}
-              onClick={() => onLocationChange(location)}
-              title={`${location.name} - Pisteet: ${score}/100`}
-            >
-              {/* Sijainti-pin */}
-              <div className={`w-8 h-8 rounded-full ${getScoreColor(score)} flex items-center justify-center text-white font-bold shadow-lg border-2 ${
-                isSelected ? 'border-white' : 'border-gray-600'
-              }`}>
-                {score}
-              </div>
-              
-              {/* Sää-ikoni */}
-              <div className="absolute -top-2 -right-2 text-sm">
-                {getWeatherIcon(location.id)}
-              </div>
-              
-              {/* Sijainnin nimi */}
-              <div className={`absolute top-10 left-1/2 transform -translate-x-1/2 text-xs font-semibold px-2 py-1 rounded shadow-lg ${
-                isSelected ? 'bg-white text-gray-900' : 'bg-gray-800 text-white'
-              }`}>
-                {location.name}
-              </div>
+          {/* Gradient definition */}
+          <defs>
+            <linearGradient id="finlandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style={{stopColor:"#86efac", stopOpacity:1}} />
+              <stop offset="100%" style={{stopColor:"#22d3ee", stopOpacity:1}} />
+            </linearGradient>
+          </defs>
+          
+          {/* Location markers */}
+          {locations.map(location => {
+            const score = getLocationScore(location.name)
+            const color = getHeatmapColor(score)
+            const isSelected = selectedLocation === location.name
+            
+            return (
+              <g key={location.id}>
+                {/* Heatmap circle */}
+                <circle
+                  cx={location.x}
+                  cy={location.y}
+                  r={isSelected ? 10 : 6}
+                  fill={color}
+                  fillOpacity={0.8}
+                  stroke={isSelected ? '#1f2937' : 'white'}
+                  strokeWidth={isSelected ? 2 : 1}
+                  className="cursor-pointer transition-all duration-200 hover:opacity-90"
+                  onClick={() => onLocationChange(location.name)}
+                />
+                
+                {/* Location label */}
+                <text
+                  x={location.x}
+                  y={location.y - 12}
+                  textAnchor="middle"
+                  className="text-xs font-medium fill-gray-800 pointer-events-none"
+                  style={{ fontSize: '10px', fontWeight: '600' }}
+                >
+                  {location.name}
+                </text>
+                
+                {/* Score */}
+                <text
+                  x={location.x}
+                  y={location.y + 2}
+                  textAnchor="middle"
+                  className="text-xs font-bold fill-white pointer-events-none"
+                  style={{ fontSize: '8px', fontWeight: 'bold' }}
+                >
+                  {score}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap items-center justify-between text-sm">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-blue-500 rounded"></div>
+            <span>0-20</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span>20-40</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
+            <span>40-60</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-orange-500 rounded"></div>
+            <span>60-80</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className="w-4 h-4 bg-red-500 rounded"></div>
+            <span>80-100</span>
+          </div>
+        </div>
+        
+        <div className="text-gray-600">
+          {activeLayer === 'weather' && 'Sääpisteet (korkeampi = huonompi sää = parempi jacuzzi-kysyntä)'}
+          {activeLayer === 'electricity' && 'Kustannustehokkuus (korkeampi = halvempi energia)'}
+          {activeLayer === 'business' && 'Kysyntäpisteet (korkeampi = enemmän asiakkaita)'}
+          {activeLayer === 'combined' && 'Yhdistetty pistemäärä (optimaalinen jacuzzi-sijainti)'}
+        </div>
+      </div>
+
+      {/* Current weather overlay */}
+      {activeLayer === 'weather' && (
+        <div className="mt-4 grid grid-cols-5 gap-2 text-center">
+          {locations.slice(0, 5).map(location => (
+            <div key={location.id} className="flex flex-col items-center p-2 bg-gray-50 rounded">
+              <div className="text-2xl">{getWeatherIcon(location.name)}</div>
+              <div className="text-xs font-medium">{location.name}</div>
             </div>
-          )
-        })}
-
-        {/* Suomen siluetti (yksinkertaistettu) */}
-        <div className="absolute inset-0 pointer-events-none">
-          <svg viewBox="0 0 100 100" className="w-full h-full opacity-30">
-            <path
-              d="M20 80 Q25 75 30 70 Q35 65 40 60 Q45 55 50 50 Q55 45 60 40 Q65 35 70 30 Q75 25 75 20 Q70 15 65 20 Q60 25 55 30 Q50 35 45 40 Q40 45 35 50 Q30 55 25 60 Q20 65 20 70 Z"
-              fill="currentColor"
-              className="text-blue-300"
-            />
-          </svg>
+          ))}
         </div>
-      </div>
-
-      {/* Kartan selite */}
-      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-gray-700 rounded p-3 text-center">
-          <div className="w-6 h-6 bg-green-500 rounded-full mx-auto mb-2"></div>
-          <span className="text-xs">Erinomainen (80+)</span>
-        </div>
-        <div className="bg-gray-700 rounded p-3 text-center">
-          <div className="w-6 h-6 bg-yellow-500 rounded-full mx-auto mb-2"></div>
-          <span className="text-xs">Hyvä (65-79)</span>
-        </div>
-        <div className="bg-gray-700 rounded p-3 text-center">
-          <div className="w-6 h-6 bg-orange-500 rounded-full mx-auto mb-2"></div>
-          <span className="text-xs">Kohtalainen (50-64)</span>
-        </div>
-        <div className="bg-gray-700 rounded p-3 text-center">
-          <div className="w-6 h-6 bg-red-500 rounded-full mx-auto mb-2"></div>
-          <span className="text-xs">Huono (alle 50)</span>
-        </div>
-      </div>
-
-      {/* Ohje */}
-      <div className="mt-4 bg-blue-900/30 border border-blue-700 rounded p-3">
-        <p className="text-sm text-blue-300">
-          💡 <strong>Ohje:</strong> Klikkaa kartalta sijaintia nähdäksesi tarkemmat tiedot. 
-          Väri kertoo sijainnin soveltuvuuden jacuzzi-puistolle kaikkien kriteerien perusteella.
-        </p>
-      </div>
+      )}
     </div>
   )
 }
