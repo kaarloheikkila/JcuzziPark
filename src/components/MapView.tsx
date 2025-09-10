@@ -12,14 +12,14 @@ interface MapViewProps {
   timeOffset: number
 }
 
-const MapView = ({ weatherData, electricityData, businessData, selectedLocation, onLocationChange, activeLayer }: MapViewProps) => {
+const MapView = ({ weatherData, electricityData, businessData, selectedLocation, onLocationChange, activeLayer, timeOffset }: MapViewProps) => {
   const [finlandPath, setFinlandPath] = useState<string>('')
   
   useEffect(() => {
-    // Load Finland border from shapefile
+    // Load Finland border from shapefile with larger dimensions to show all of Finland
     const loadFinlandPath = async () => {
       try {
-        const path = await ShapefileService.getFinlandPath(300, 400)
+        const path = await ShapefileService.getFinlandPath(600, 800)
         setFinlandPath(path)
       } catch (error) {
         console.error('Error loading Finland path:', error)
@@ -45,7 +45,7 @@ const MapView = ({ weatherData, electricityData, businessData, selectedLocation,
   
   // Convert real coordinates to SVG coordinates using improved projection
   const locations = finlandCities.map(city => {
-    const [x, y] = ShapefileService.projectCoordinates(city.lon, city.lat, 300, 400)
+    const [x, y] = ShapefileService.projectCoordinates(city.lon, city.lat, 600, 800)
     return {
       id: city.id,
       name: city.name,
@@ -98,12 +98,10 @@ const MapView = ({ weatherData, electricityData, businessData, selectedLocation,
   }
 
   return (
-    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg p-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">🗺️ Suomen Jacuzzi-kartta</h3>
-      
+    <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg p-4 h-full">
       {/* SVG Map */}
-      <div className="relative">
-        <svg viewBox="0 0 300 400" className="w-full h-96 border border-gray-300 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200">
+      <div className="relative h-full">
+        <svg viewBox="0 0 600 800" className="w-full h-full min-h-[400px] border border-gray-300 rounded-lg bg-gradient-to-br from-blue-100 to-blue-200">
           {/* Finland outline from shapefile */}
           <path
             d={finlandPath || ShapefileService.getFallbackFinlandPath()}
@@ -166,39 +164,6 @@ const MapView = ({ weatherData, electricityData, businessData, selectedLocation,
             )
           })}
         </svg>
-      </div>
-
-      {/* Legend */}
-      <div className="mt-4 flex flex-wrap items-center justify-between text-sm">
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-blue-500 rounded"></div>
-            <span>0-20</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-green-500 rounded"></div>
-            <span>20-40</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-yellow-500 rounded"></div>
-            <span>40-60</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-orange-500 rounded"></div>
-            <span>60-80</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 bg-red-500 rounded"></div>
-            <span>80-100</span>
-          </div>
-        </div>
-        
-        <div className="text-gray-600">
-          {activeLayer === 'weather' && 'Sääpisteet (korkeampi = huonompi sää = parempi jacuzzi-kysyntä)'}
-          {activeLayer === 'electricity' && 'Kustannustehokkuus (korkeampi = halvempi energia)'}
-          {activeLayer === 'business' && 'Kysyntäpisteet (korkeampi = enemmän asiakkaita)'}
-          {activeLayer === 'combined' && 'Yhdistetty pistemäärä (optimaalinen jacuzzi-sijainti)'}
-        </div>
       </div>
 
       {/* Current weather overlay */}

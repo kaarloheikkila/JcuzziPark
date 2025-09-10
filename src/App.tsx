@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import Dashboard from './components/Dashboard'
 import MapView from './components/MapView'
+import AlternativeApp from './components/AlternativeApp'
 import DataService from './services/DataService'
 import { WeatherData, ElectricityData, BusinessData } from './types'
 import './App.css'
@@ -13,6 +14,7 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [activeLayer, setActiveLayer] = useState<'weather' | 'electricity' | 'business' | 'combined'>('combined')
   const [timeOffset, setTimeOffset] = useState(0) // Hours from now
+  const [useAlternativeUI, setUseAlternativeUI] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,6 +43,11 @@ function App() {
     fetchData()
   }, [])
 
+  // Toggle between UIs
+  if (useAlternativeUI) {
+    return <AlternativeApp onBackToOriginal={() => setUseAlternativeUI(false)} />
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -57,9 +64,17 @@ function App() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <h1 className="text-4xl font-bold text-gray-900 text-center">
-            Where to Deploy Electric Jacuzzi Park?
-          </h1>
+          <div className="flex items-center justify-between">
+            <h1 className="text-4xl font-bold text-gray-900">
+              Where to Deploy Electric Jacuzzi Park?
+            </h1>
+            <button
+              onClick={() => setUseAlternativeUI(true)}
+              className="px-6 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-semibold rounded-lg hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg"
+            >
+              🚀 Try Alternative UI
+            </button>
+          </div>
         </div>
       </header>
 
